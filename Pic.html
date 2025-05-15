@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Tempo de Deslocação + Espera - CUF</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px }
+    #resultado { margin-top: 20px; font-size: 1.2em }
+  </style>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyByfJeCpBqWdtJXhYgilMRN9SPdIqUzCEY"></script>
+</head>
+<body>
+
+  <div>
+    <label for="age">Idade:</label>
+    <input type="number" id="age" min="0" placeholder="Ex: 35" autocomplete="off" />
+  </div>
+  <div id="resultado"></div>
+
+  <script>
+    let waitData = [];
+    async function fetchWaitTimes() {
+      const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
+      const res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(target));
+      waitData = await res.json();
+    }
+
+    let minhaLat = null, minhaLng = null;
+
+    async function getLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Navegador não suporta geolocalização.'));
+        } else {
+          navigator.geolocation.getCurrentPosition(pos => {
+            minhaLat = pos.coords.latitude;
+            minhaLng = pos.coords.longitude;
+            resolve();
+          }, err => reject(new Error('Permissão negada para geolocalização.')));
+        }
+      });
+    }
+
+    async function calcularTempoSegundos(destination) {
+      return new Promise(resolve => {
+        const service = new google.maps.DistanceMatrixService();
+        service.getDistanceMatrix({
+          origins:      [{ lat: minhaLat, lng: minhaLng }],
+          destinations: [ destination ],
+          travelMode:   'DRIVING',
+          drivingOptions: { departureTime: new Date(), trafficModel: google.maps.TrafficModel.BEST_GUESS }
+        }, (response, status) => {
+          if (status !== 'OK') return resolve(Infinity);
+          const elem = response.rows[0].elements[0];
+          resolve(elem.status === 'OK' && elem.duration_in_traffic
+            ? elem.duration_in_traffic.value
+            : Infinity);
+        });
+      });
+    }
+
+    async function minimoTempo(age) {
+      const now = new Date();
+      const apCode = age >= 18
+        ? 'Atendimento Permanente Adultos'
+        : 'Atendimento Permanente Pediátrico';
+
+      const candidates = [];
+      for (const entry of waitData) {
+        const ap = entry.aps.find(a => a.code === apCode);
+        if (!ap) continue;
+
+        const [dateS, timeS] = ap.startDate.split(' ');
+        const [dayS, monthS, yearS] = dateS.split('/');
+        const [hS, mS, sS] = timeS.split(':');
+        const startDT = new Date(+yearS, monthS-1, +dayS, +hS, +mS, +sS);
+
+        const [dateE, timeE] = ap.endDate.split(' ');
+        const [dayE, monthE, yearE] = dateE.split('/');
+        const [hE, mE, sE] = timeE.split(':');
+        const endDT = new Date(+yearE, monthE-1, +dayE, +hE, +mE, +sE);
+
+        if (now < startDT || now > endDT) continue;
+
+        const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
+        const waitMin = urg?.waitingTimeMinutes ?? Infinity;
+
+        const destination = `${entry.name}, Portugal`;
+        const travelSec = await calcularTempoSegundos(destination);
+        if (!isFinite(travelSec)) continue;
+
+        const arrivalDT = new Date(now.getTime() + travelSec * 1000);
+        if (arrivalDT > endDT) continue;
+
+        candidates.push({
+          hospital: entry.name,
+          travelMin: travelSec / 60,
+          waitMin,
+          totalMin: travelSec / 60 + waitMin
+        });
+      }
+
+      if (candidates.length === 0) {
+        document.getElementById('resultado').textContent = "❌ Nenhum hospital disponível agora.";
+        return;
+      }
+
+      candidates.sort((a, b) => a.totalMin - b.totalMin);
+      const best = candidates[0];
+
+      document.getElementById('resultado').innerHTML =
+        `🩺 Melhor hospital: <strong>${best.hospital}</strong><br>` +
+        `⏱ Trânsito: <strong>${Math.round(best.travelMin)} min</strong><br>` +
+        `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
+        `⏱ Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
+    }
+
+    window.addEventListener('load', () => {
+      const ageInput = document.getElementById('age');
+      ageInput.focus();
+      ageInput.addEventListener('keydown', async e => {
+        if (e.key === 'Enter') {
+          const age = parseInt(ageInput.value, 10);
+          if (isNaN(age)) {
+            document.getElementById('resultado').textContent = '⚠️ Idade inválida.';
+            return;
+          }
+          document.getElementById('resultado').textContent = '⌛ Processando...';
+          try {
+            await fetchWaitTimes();
+            await getLocation();
+            await minimoTempo(age);
+          } catch (err) {
+            document.getElementById('resultado').textContent = `❌ ${err.message}`;
+          }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Tempo de Deslocação + Espera - CUF</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px }
+    #resultado { margin-top: 20px; font-size: 1.2em }
+  </style>
+  <!-- SDK do Maps para usar DistanceMatrixService -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyByfJeCpBqWdtJXhYgilMRN9SPdIqUzCEY"></script>
+</head>
+<body>
+
+  <div>
+    <label for="age">Idade:</label>
+    <input type="number" id="age" min="0" placeholder="Ex: 35" autocomplete="off" />
+  </div>
+  <div id="resultado"></div>
+
+  <script>
+    // 1) Carrega tempos de espera da CUF
+    let waitData = [];
+    async function fetchWaitTimes() {
+      try {
+        const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
+        const res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(target));
+        waitData = await res.json();
+      } catch (err) {
+        console.error("Erro ao obter tempos de espera:", err);
+      }
+    }
+    fetchWaitTimes();
+
+    // 2) Geolocalização
+    let minhaLat = null, minhaLng = null;
+    function obterLocalizacao() {
+      const resultado = document.getElementById("resultado");
+      resultado.textContent = "A obter localização…";
+      if (!navigator.geolocation) {
+        resultado.textContent = "❌ Navegador não suporta geolocalização.";
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(pos => {
+        minhaLat = pos.coords.latitude;
+        minhaLng = pos.coords.longitude;
+        resultado.textContent = "📍 Localização obtida. Insira sua idade e pressione Enter.";
+        document.getElementById('age').focus();
+      }, () => {
+        resultado.textContent = "❌ Permissão negada para geolocalização.";
+      });
+    }
+
+    // 3) Função para calcular tempo de trânsito (em segundos)
+    async function calcularTempoSegundos(destination) {
+      return new Promise(resolve => {
+        const service = new google.maps.DistanceMatrixService();
+        service.getDistanceMatrix({
+          origins:      [{ lat:minhaLat, lng: minhaLng }], 
+          destinations: [ destination ],
+          travelMode:   'DRIVING',
+          drivingOptions: { departureTime: new Date(), trafficModel: google.maps.TrafficModel.BEST_GUESS }
+        }, (response, status) => {
+          if (status !== 'OK') return resolve(Infinity);
+          const elem = response.rows[0].elements[0];
+          if (elem.status === 'OK' && elem.duration_in_traffic) {
+            resolve(elem.duration_in_traffic.value);
+          } else {
+            resolve(Infinity);
+          }
+        });
+      });
+    }
+
+    // 4) Lógica principal: filtra e combina espera + trânsito com restrição de chegada
+    async function minimoTempo() {
+      const resultado = document.getElementById("resultado");
+      if (!minhaLat || !minhaLng) {
+        resultado.textContent = "⚠️ Aguardando localização...";
+        return;
+      }
+      const ageInput = document.getElementById("age");
+      const age = parseInt(ageInput.value, 10);
+      if (isNaN(age)) {
+        resultado.textContent = "⚠️ Por favor, insira uma idade válida.";
+        return;
+      }
+      const now = new Date();
+      const apCode = age >= 18 ? 'Atendimento Permanente Adultos' : 'Atendimento Permanente Pediátrico';
+
+      const candidates = [];
+      for (const entry of waitData) {
+        // filtra APS
+        const ap = entry.aps.find(a => a.code === apCode);
+        if (!ap) continue;
+
+        // parse start/end como Date
+        const [dateS, timeS] = ap.startDate.split(' ');
+        const [dayS, monthS, yearS] = dateS.split('/');
+        const [hS, mS, sS] = timeS.split(':');
+        const startDT = new Date(
+          parseInt(yearS,10), parseInt(monthS,10)-1, parseInt(dayS,10),
+          parseInt(hS,10), parseInt(mS,10), parseInt(sS,10)
+        );
+        const [dateE, timeE] = ap.endDate.split(' ');
+        const [dayE, monthE, yearE] = dateE.split('/');
+        const [hE, mE, sE] = timeE.split(':');
+        const endDT = new Date(
+          parseInt(yearE,10), parseInt(monthE,10)-1, parseInt(dayE,10),
+          parseInt(hE,10), parseInt(mE,10), parseInt(sE,10)
+        );
+
+        // verificar janela de atendimento nesta data/hora
+        if (now < startDT || now > endDT) continue;
+
+        // tempo de espera (verde)
+        const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
+        const waitMin = urg?.waitingTimeMinutes ?? Infinity;
+
+        // calcula trânsito
+        const destination = `${entry.name}, Portugal`;
+        const travelSec = await calcularTempoSegundos(destination);
+        if (!isFinite(travelSec)) continue;
+
+        // restrição: chegada antes do fim
+        const arrivalDT = new Date(now.getTime() + travelSec * 1000);
+        if (arrivalDT > endDT) continue;
+
+        // adiciona candidato
+        candidates.push({
+          hospital: entry.name,
+          travelMin: travelSec / 60,
+          waitMin,
+          totalMin: travelSec / 60 + waitMin
+        });
+      }
+
+      if (candidates.length === 0) {
+        resultado.textContent = "❌ Nenhum hospital disponível agora.";
+        return;
+      }
+      // ordena e mostra
+      candidates.sort((a,b) => a.totalMin - b.totalMin);
+      const best = candidates[0];
+      resultado.innerHTML =
+        `🩺 Melhor hospital: <strong>${best.hospital}</strong><br>` +
+        `⏱ Trânsito: <strong>${Math.round(best.travelMin)} min</strong><br>` +
+        `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
+        `⏱ Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
+    }
+
+    // 5) Automação: ao carregar, pede localização; Enter na idade dispara cálculo
+    window.addEventListener('load', () => {
+      fetchWaitTimes().then(() => obterLocalizacao());
+      document.getElementById('age').addEventListener('keydown', e => {
+        if (e.key === 'Enter') minimoTempo();
+      });
+    });
+  </script>
+</body>
+</html>
+
