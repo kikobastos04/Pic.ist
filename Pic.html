@@ -37,7 +37,7 @@
             minhaLat = pos.coords.latitude;
             minhaLng = pos.coords.longitude;
             resolve();
-          }, err => reject(new Error('Permissão negada para geolocalização.')));
+          }, err => reject(new Error('Verifique see permitiu o acesso à localização')));
         }
       });
     }
@@ -110,7 +110,7 @@
       const best = candidates[0];
 
       document.getElementById('resultado').innerHTML =
-        `🩺 Melhor hospital: <strong>${best.hospital}</strong><br>` +
+        `🩺 Hospital Sugerido: <strong>${best.hospital}</strong><br>` +
         `⏱ Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
         `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
         `⏱ Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
