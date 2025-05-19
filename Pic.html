@@ -111,9 +111,9 @@
 
       document.getElementById('resultado').innerHTML =
         `🩺 Hospital Sugerido: <strong>${best.hospital}</strong><br>` +
-        `⏱ Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
-        `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
-        `⏱ Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
+        `Tempo Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
+        `Tempo Espera Verde: <strong>${best.waitMin} min</strong><br>` +
+        `Tempo Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
     }
 
     window.addEventListener('load', () => {
