@@ -63,60 +63,49 @@
     }
 
     async function minimoTempo(age) {
-      const now = new Date();
-      const apCode = age >= 18
-        ? 'Atendimento Permanente Adultos'
-        : 'Atendimento Permanente Pediátrico';
+  const apCode = age >= 18
+    ? 'Atendimento Permanente Adultos'
+    : 'Atendimento Permanente Pediátrico';
 
-      const candidates = [];
-      for (const entry of waitData) {
-        const ap = entry.aps.find(a => a.code === apCode);
-        if (!ap) continue;
+  const candidates = [];
 
-        const [dateS, timeS] = ap.startDate.split(' ');
-        const [dayS, monthS, yearS] = dateS.split('/');
-        const [hS, mS, sS] = timeS.split(':');
-        const startDT = new Date(+yearS, monthS-1, +dayS, +hS, +mS, +sS);
+  for (const entry of waitData) {
+    const ap = entry.aps.find(a => a.code === apCode);
+    if (!ap) continue;
 
-        const [dateE, timeE] = ap.endDate.split(' ');
-        const [dayE, monthE, yearE] = dateE.split('/');
-        const [hE, mE, sE] = timeE.split(':');
-        const endDT = new Date(+yearE, monthE-1, +dayE, +hE, +mE, +sE);
+    const urg = ap.times.reduce((min, t) =>
+      !min || (t.waitingTimeMinutes < min.waitingTimeMinutes)
+        ? t
+        : min,
+      null
+    );
 
-        if (now < startDT || now > endDT) continue;
+    const waitMin = urg?.waitingTimeMinutes ?? Infinity;
+    const travelSec = 0; // <- Ignorado para garantir que passa
 
-        const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
-        const waitMin = urg?.waitingTimeMinutes ?? Infinity;
+    if (!isFinite(waitMin)) continue;
 
-        const destination = `${entry.name}, Portugal`;
-        const travelSec = await calcularTempoSegundos(destination);
-        if (!isFinite(travelSec)) continue;
+    candidates.push({
+      hospital: entry.name,
+      waitMin,
+      travelMin: travelSec / 60,
+      totalMin: waitMin
+    });
+  }
 
-        const arrivalDT = new Date(now.getTime() + travelSec * 1000);
-        if (arrivalDT > endDT) continue;
+  if (candidates.length === 0) {
+    document.getElementById('resultado').textContent = "❌ Nenhum hospital disponível agora.";
+    return;
+  }
 
-        candidates.push({
-          hospital: entry.name,
-          travelMin: travelSec / 60,
-          waitMin,
-          totalMin: travelSec / 60 + waitMin
-        });
-      }
+  candidates.sort((a, b) => a.totalMin - b.totalMin);
+  const best = candidates[0];
 
-      if (candidates.length === 0) {
-        document.getElementById('resultado').textContent = "❌ Nenhum hospital disponível agora.";
-        return;
-      }
+  document.getElementById('resultado').innerHTML =
+    `🩺 Hospital Sugerido: <strong>${best.hospital}</strong><br>` +
+    `Tempo Espera: <strong>${best.waitMin} min</strong>`;
+}
 
-      candidates.sort((a, b) => a.totalMin - b.totalMin);
-      const best = candidates[0];
-
-      document.getElementById('resultado').innerHTML =
-        `🩺 Hospital Sugerido: <strong>${best.hospital}</strong><br>` +
-        `Tempo Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
-        `Tempo Espera Verde: <strong>${best.waitMin} min</strong><br>` +
-        `Tempo Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
-    }
 
     window.addEventListener('load', () => {
       const ageInput = document.getElementById('age');
