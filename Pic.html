@@ -20,11 +20,13 @@
 
   <script>
     let waitData = [];
-    async function fetchWaitTimes() {
-      const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
-      const res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(target));
-      waitData = await res.json();
-    }
+   async function fetchWaitTimes() {
+  const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
+  const res = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(target));
+  const raw = await res.json();
+  waitData = JSON.parse(raw.contents); // <- esta linha é a correção!
+}
+
 
     let minhaLat = null, minhaLng = null;
 
@@ -81,7 +83,7 @@
         const [hE, mE, sE] = timeE.split(':');
         const endDT = new Date(+yearE, monthE-1, +dayE, +hE, +mE, +sE);
 
-        //if (now < startDT || now > endDT) continue;
+        if (now < startDT || now > endDT) continue;
 
         const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
         const waitMin = urg?.waitingTimeMinutes ?? Infinity;
