@@ -81,7 +81,7 @@
         const [hE, mE, sE] = timeE.split(':');
         const endDT = new Date(+yearE, monthE-1, +dayE, +hE, +mE, +sE);
 
-        if (now < startDT || now > endDT) continue;
+        //if (now < startDT || now > endDT) continue;
 
         const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
         const waitMin = urg?.waitingTimeMinutes ?? Infinity;
