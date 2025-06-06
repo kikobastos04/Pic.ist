@@ -70,8 +70,9 @@
     : 'Atendimento Permanente Pediátrico';
 
   const candidates = [];
-
+console.log("🔁 Iniciando varrimento dos hospitais. Total:", waitData.length);
   for (const entry of waitData) {
+    console.log("🔍 A analisar hospital:", entry.name);
     const ap = entry.aps.find(a => a.code === apCode);
     if (!ap) continue;
 
