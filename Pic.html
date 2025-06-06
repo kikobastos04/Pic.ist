@@ -21,13 +21,10 @@
   <script>
     let waitData = [];
     async function fetchWaitTimes() {
-  const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
-  const res = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(target));
-  const raw = await res.json();
-  waitData = JSON.parse(raw.contents); // <-- isto transforma a string num array JSON real
-  console.log("✔️ Dados carregados:", waitData);
-}
-
+      const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
+      const res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(target));
+      waitData = await res.json();
+    }
 
     let minhaLat = null, minhaLng = null;
 
@@ -64,66 +61,60 @@
     }
 
     async function minimoTempo(age) {
-  const now = new Date();
-  const apCode = age >= 18
-    ? 'Atendimento Permanente Adultos'
-    : 'Atendimento Permanente Pediátrico';
+      const now = new Date();
+      const apCode = age >= 18
+        ? 'Atendimento Permanente Adultos'
+        : 'Atendimento Permanente Pediátrico';
 
-  const candidates = [];
-  for (const entry of waitData) {
-    console.log("🔍 A analisar hospital:", entry.name);
-    const ap = entry.aps.find(a => a.code.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === apCode.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
-    console.log("❌ Não tem atendimento para:", apCode);
-    if (!ap) continue;
+      const candidates = [];
+      for (const entry of waitData) {
+        const ap = entry.aps.find(a => a.code === apCode);
+        if (!ap) continue;
 
-    const [dateS, timeS] = ap.startDate.split(' ');
-    const [dayS, monthS, yearS] = dateS.split('/');
-    const [hS, mS, sS] = timeS.split(':');
-    const startDT = new Date(+yearS, monthS - 1, +dayS, +hS, +mS, +sS);
+        const [dateS, timeS] = ap.startDate.split(' ');
+        const [dayS, monthS, yearS] = dateS.split('/');
+        const [hS, mS, sS] = timeS.split(':');
+        const startDT = new Date(+yearS, monthS-1, +dayS, +hS, +mS, +sS);
 
-    const [dateE, timeE] = ap.endDate.split(' ');
-    const [dayE, monthE, yearE] = dateE.split('/');
-    const [hE, mE, sE] = timeE.split(':');
-    const endDT = new Date(+yearE, monthE - 1, +dayE, +hE, +mE, +sE);
+        const [dateE, timeE] = ap.endDate.split(' ');
+        const [dayE, monthE, yearE] = dateE.split('/');
+        const [hE, mE, sE] = timeE.split(':');
+        const endDT = new Date(+yearE, monthE-1, +dayE, +hE, +mE, +sE);
 
-    if (now < startDT || now > endDT) continue;
+        if (now < startDT || now > endDT) continue;
 
-    const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
-    if (!urg) continue;
-    
-    const waitMin = urg?.waitingTimeMinutes ?? Infinity;
-    if (!isFinite(waitMin)) continue;
+        const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
+        const waitMin = urg?.waitingTimeMinutes ?? Infinity;
 
-    const destination = `${entry.name}, Portugal`;
-    const travelSec = await calcularTempoSegundos(destination);
-    if (!isFinite(travelSec)) continue;
+        const destination = `${entry.name}, Portugal`;
+        const travelSec = await calcularTempoSegundos(destination);
+        if (!isFinite(travelSec)) continue;
 
-    const arrivalDT = new Date(now.getTime() + travelSec * 1000);
-    if (arrivalDT > endDT) continue;
+        const arrivalDT = new Date(now.getTime() + travelSec * 1000);
+        if (arrivalDT > endDT) continue;
 
-    candidates.push({
-      hospital: entry.name,
-      travelMin: travelSec / 60,
-      waitMin,
-      totalMin: travelSec / 60 + waitMin
-    });
-  }
+        candidates.push({
+          hospital: entry.name,
+          travelMin: travelSec / 60,
+          waitMin,
+          totalMin: travelSec / 60 + waitMin
+        });
+      }
 
-  if (candidates.length === 0) {
-    document.getElementById('resultado').textContent = "❌ Nenhum hospital disponível agora.";
-    return;
-  }
+      if (candidates.length === 0) {
+        document.getElementById('resultado').textContent = "❌ Nenhum hospital disponível agora.";
+        return;
+      }
 
-  candidates.sort((a, b) => a.totalMin - b.totalMin);
-  const best = candidates[0];
+      candidates.sort((a, b) => a.totalMin - b.totalMin);
+      const best = candidates[0];
 
-  document.getElementById('resultado').innerHTML =
-    `🩺 Hospital: <strong>${best.hospital}</strong><br>` +
-    `⏱ Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
-    `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
-    `⏱ Total estimado: <strong>${Math.round(best.totalMin)} min</strong>`;
-}
-
+      document.getElementById('resultado').innerHTML =
+        `🩺 Melhor hospital: <strong>${best.hospital}</strong><br>` +
+        `⏱ Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
+        `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
+        `⏱ Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
+    }
 
     window.addEventListener('load', () => {
       const ageInput = document.getElementById('age');
