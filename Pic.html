@@ -70,10 +70,10 @@
     : 'Atendimento Permanente Pediátrico';
 
   const candidates = [];
-console.log("🔁 Iniciando varrimento dos hospitais. Total:", waitData.length);
   for (const entry of waitData) {
     console.log("🔍 A analisar hospital:", entry.name);
     const ap = entry.aps.find(a => a.code === apCode);
+    console.log("❌ Não tem atendimento para:", apCode);
     if (!ap) continue;
 
     const [dateS, timeS] = ap.startDate.split(' ');
@@ -89,6 +89,8 @@ console.log("🔁 Iniciando varrimento dos hospitais. Total:", waitData.length);
     if (now < startDT || now > endDT) continue;
 
     const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
+    if (!urg) continue;
+    
     const waitMin = urg?.waitingTimeMinutes ?? Infinity;
     if (!isFinite(waitMin)) continue;
 
