@@ -20,10 +20,12 @@
 
   <script>
     let waitData = [];
+
     async function fetchWaitTimes() {
       const target = "https://www.cuf.pt/api/get-waiting-times?locale=pt";
-      const res = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(target));
-      waitData = await res.json();
+      const res = await fetch("https://api.allorigins.win/get?url=" + encodeURIComponent(target));
+      const raw = await res.json();
+      waitData = JSON.parse(raw.contents); // ✅ ESSA LINHA corrige o problema
     }
 
     let minhaLat = null, minhaLng = null;
@@ -85,6 +87,7 @@
 
         const urg = ap.times.find(t => t.color.toLowerCase() === 'verde');
         const waitMin = urg?.waitingTimeMinutes ?? Infinity;
+        if (!isFinite(waitMin)) continue;
 
         const destination = `${entry.name}, Portugal`;
         const travelSec = await calcularTempoSegundos(destination);
@@ -132,6 +135,7 @@
             await getLocation();
             await minimoTempo(age);
           } catch (err) {
+            console.error(err);
             document.getElementById('resultado').textContent = `❌ ${err.message}`;
           }
         }
