@@ -72,7 +72,7 @@
   const candidates = [];
   for (const entry of waitData) {
     console.log("🔍 A analisar hospital:", entry.name);
-    const ap = entry.aps.find(a => a.code === apCode);
+    const ap = entry.aps.find(a => a.code.normalize("NFD").replace(/[\u0300-\u036f]/g, "") === apCode.normalize("NFD").replace(/[\u0300-\u036f]/g, ""));
     console.log("❌ Não tem atendimento para:", apCode);
     if (!ap) continue;
 
