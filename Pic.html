@@ -110,10 +110,10 @@
       const best = candidates[0];
 
       document.getElementById('resultado').innerHTML =
-        `🩺 Melhor hospital: <strong>${best.hospital}</strong><br>` +
-        `⏱ Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
-        `⏱ Espera Verde: <strong>${best.waitMin} min</strong><br>` +
-        `⏱ Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
+        `🩺 Hospital sugerido: <strong>${best.hospital}</strong><br>` +
+        `Tempo de Viagem: <strong>${Math.round(best.travelMin)} min</strong><br>` +
+        `Tempo de Espera Verde: <strong>${best.waitMin} min</strong><br>` +
+        `Tempo Total aproximado: <strong>${Math.round(best.totalMin)} min</strong>`;
     }
 
     window.addEventListener('load', () => {
